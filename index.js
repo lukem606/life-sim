@@ -3,15 +3,74 @@ const WIDTH = window.innerWidth - PAD;
 const HEIGHT = window.innerHeight - PAD;
 const WHITE = "rgb(255, 255, 255)";
 const BLACK = "rgb(0, 0, 0)";
+const GREEN = "rgb(3, 160, 98)";
 document.querySelector("body").style.padding = `${PAD}px`;
 
 class Cell {
   constructor(index, cellsX) {
     this.posX = index % cellsX;
     this.posY = Math.floor(index / cellsX);
-    this.dirX = Math.round(Math.random() * 2) - 1;
-    this.dirY = Math.round(Math.random() * 2) - 1;
-    this.rate = Math.floor(Math.random() * 3) + 1;
+  }
+}
+
+class Plant extends Cell {
+  constructor(index, cellsX) {
+    super(index, cellsX);
+    this.life = 10;
+  }
+}
+
+class Creature extends Cell {
+  constructor(index, cellsX) {
+    super(index, cellsX);
+    this.dirX = 0;
+    this.dirY = 0;
+    this.rate = Math.round(Math.random() * 2) + 1;
+    this.life = 10;
+    this.target = false;
+  }
+
+  getDistance(plant) {
+    return Math.abs(this.posX - plant.posX) + Math.abs(this.posY - plant.posY);
+  }
+
+  findClosestPlant(plants) {
+    return plants.reduce((previous, current) => {
+      return this.getDistance(previous) <= this.getDistance(current)
+        ? previous
+        : current;
+    });
+  }
+
+  move() {
+    if (this.posX === this.target.posX) {
+      this.dirX = 0;
+    } else if (this.posX < this.target.posX) {
+      this.dirX = 1;
+    } else if (this.posX > this.target.posX) {
+      this.dirX = -1;
+    }
+
+    if (this.posY === this.target.posY) {
+      this.dirY = 0;
+    } else if (this.posY < this.target.posY) {
+      this.dirY = 1;
+    } else if (this.posY > this.target.posY) {
+      this.dirY = -1;
+    }
+
+    this.posX += this.dirX * this.rate;
+    this.posY += this.dirY * this.rate;
+
+    this.life -= 1;
+  }
+
+  live(plants) {
+    if (!this.target) {
+      this.target = this.findClosestPlant(plants);
+    } else {
+      this.move(this.target);
+    }
   }
 }
 
@@ -26,6 +85,18 @@ class Game {
     this.cellsX = (WIDTH - (WIDTH % this.cellSize)) / this.cellSize;
     this.cellsY = (HEIGHT - (HEIGHT % this.cellSize)) / this.cellSize;
     this.creatures = this.createCreatures();
+    this.plants = [];
+  }
+
+  createPlants(totalPlants) {
+    for (let i = 0; i < totalPlants; i++) {
+      this.plants.push(
+        new Plant(
+          Math.floor(Math.random() * (this.cellsX * this.cellsY)),
+          this.cellsX
+        )
+      );
+    }
   }
 
   createCreatures() {
@@ -33,7 +104,7 @@ class Game {
 
     for (let i = 0; i < 5; i++) {
       returnArray.push(
-        new Cell(
+        new Creature(
           Math.floor(Math.random() * (this.cellsX * this.cellsY)),
           this.cellsX
         )
@@ -49,10 +120,10 @@ class Game {
     this.context.closePath();
   }
 
-  drawCreatures() {
+  drawLife() {
     this.context.beginPath();
-    this.context.fillStyle = WHITE;
 
+    this.context.fillStyle = WHITE;
     this.creatures.forEach((creature) => {
       this.context.fillRect(
         creature.posX * this.cellSize,
@@ -62,29 +133,44 @@ class Game {
       );
     });
 
+    this.context.fillStyle = GREEN;
+    this.plants.forEach((plant) => {
+      this.context.fillRect(
+        plant.posX * this.cellSize,
+        plant.posY * this.cellSize,
+        this.cellSize,
+        this.cellSize
+      );
+    });
+
     this.context.closePath();
   }
 
-  updateCreatures() {
+  timePasses() {
     this.creatures.forEach((creature) => {
-      creature.posX += creature.dirX * creature.rate;
-      creature.posY += creature.dirY * creature.rate;
+      creature.live(this.plants);
     });
   }
 
   gameLoop() {
     this.clearCanvas();
-    this.drawCreatures();
-    this.updateCreatures();
+
+    if (Math.random() > 0.75) {
+      this.createPlants(Math.ceil(Math.random() * 4) + 1);
+    }
+
+    this.drawLife();
+    this.timePasses();
   }
 
   run() {
-    console.log(this.creatures);
+    this.createPlants(10);
+
     setInterval(() => {
       this.gameLoop();
     }, 1000 / this.fps);
   }
 }
 
-const game = new Game(4, 10);
+const game = new Game(4, 6);
 game.run();
