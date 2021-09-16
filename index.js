@@ -18,6 +18,10 @@ class Plant extends Cell {
     super(index, cellsX);
     this.life = 10;
   }
+
+  live() {
+    this.life -= 1;
+  }
 }
 
 class Creature extends Cell {
@@ -27,7 +31,6 @@ class Creature extends Cell {
     this.dirY = 0;
     this.rate = Math.round(Math.random() * 2) + 1;
     this.life = 10;
-    this.target = false;
   }
 
   getDistance(plant) {
@@ -65,12 +68,15 @@ class Creature extends Cell {
     this.life -= 1;
   }
 
+  eat() {
+    console.log("eat");
+  }
+
   live(plants) {
-    if (!this.target) {
-      this.target = this.findClosestPlant(plants);
-    } else {
-      this.move(this.target);
-    }
+    this.target = this.findClosestPlant(plants);
+    this.move(this.target);
+    //} else if (this.getDistance(plant) < 2) {
+    //  this.eat(plant);
   }
 }
 
@@ -149,6 +155,18 @@ class Game {
   timePasses() {
     this.creatures.forEach((creature) => {
       creature.live(this.plants);
+
+      if (creature.life === 0) {
+        this.creatures.splice(this.creatures.indexOf(creature), 1);
+      }
+    });
+
+    this.plants.forEach((plant) => {
+      plant.live();
+
+      if (plant.life === 0) {
+        this.plants.splice(this.plants.indexOf(plant), 1);
+      }
     });
   }
 
