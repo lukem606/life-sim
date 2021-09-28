@@ -3,7 +3,10 @@ const WIDTH = window.innerWidth - PAD;
 const HEIGHT = window.innerHeight - PAD;
 const WHITE = "rgb(255, 255, 255)";
 const BLACK = "rgb(0, 0, 0)";
+const RED = "rgb(200, 0, 0";
+const PALE_RED = "rgb(255, 130, 130)";
 const GREEN = "rgb(3, 160, 98)";
+const OLIVE = "rgb(128, 128, 0)";
 document.querySelector("body").style.padding = `${PAD}px`;
 
 class Cell {
@@ -16,7 +19,7 @@ class Cell {
 class Plant extends Cell {
   constructor(index, cellsX) {
     super(index, cellsX);
-    this.life = 10;
+    this.life = Math.round(Math.random() * 49) + 1;
   }
 
   live() {
@@ -25,27 +28,41 @@ class Plant extends Cell {
 }
 
 class Creature extends Cell {
-  constructor(index, cellsX) {
+  constructor(index, cellsX, rate = Math.round(Math.random() * 2) + 1) {
     super(index, cellsX);
     this.dirX = 0;
     this.dirY = 0;
-    this.rate = Math.round(Math.random() * 2) + 1;
-    this.life = 10;
+    this.rate = rate;
+    this.life = 20;
+  }
+
+  getDifference(self, other) {
+    return Math.abs(self - other);
   }
 
   getDistance(plant) {
-    return Math.abs(this.posX - plant.posX) + Math.abs(this.posY - plant.posY);
+    return (
+      this.getDifference(this.posX, plant.posX) +
+      this.getDifference(this.posY, plant.posY)
+    );
   }
 
   findClosestPlant(plants) {
-    return plants.reduce((previous, current) => {
-      return this.getDistance(previous) <= this.getDistance(current)
-        ? previous
-        : current;
-    });
+    if (plants.length >= 1) {
+      return plants.reduce((previous, current) => {
+        return this.getDistance(previous) <= this.getDistance(current)
+          ? previous
+          : current;
+      });
+    } else {
+      return null;
+    }
   }
 
   move() {
+    const xDif = this.getDifference(this.posX, this.target.posX);
+    const yDif = this.getDifference(this.posY, this.target.posY);
+
     if (this.posX === this.target.posX) {
       this.dirX = 0;
     } else if (this.posX < this.target.posX) {
@@ -62,21 +79,46 @@ class Creature extends Cell {
       this.dirY = -1;
     }
 
-    this.posX += this.dirX * this.rate;
-    this.posY += this.dirY * this.rate;
+    if (xDif < this.rate) {
+      this.posX += this.dirX * (xDif - 1);
+    } else if (xDif == this.rate) {
+      this.posX += this.dirX * (this.rate - 1);
+    } else if (xDif > this.rate) {
+      this.posX += this.dirX * this.rate;
+    }
 
-    this.life -= 1;
+    if (yDif < this.rate) {
+      this.posY += this.dirY * (yDif - 1);
+    } else if (yDif == this.rate) {
+      this.posY += this.dirY * (this.rate - 1);
+    } else if (yDif > this.rate) {
+      this.posY += this.dirY * this.rate;
+    }
+
+    this.life -= this.rate == 2 ? 2 : 1;
   }
 
-  eat() {
-    console.log("eat");
+  eat(plant) {
+    this.life += plant.life < 10 ? plant.life : 10;
+    plant.life = 0;
   }
 
   live(plants) {
     this.target = this.findClosestPlant(plants);
-    this.move(this.target);
-    //} else if (this.getDistance(plant) < 2) {
-    //  this.eat(plant);
+
+    if (this.target != null) {
+      if (
+        this.getDistance(this.target) <= 1 ||
+        (this.getDifference(this.posX, this.target.posX) == 1 &&
+          this.getDifference(this.posX, this.target.posX) == 1) ||
+        (this.getDifference(this.posX, this.target.posX) == 1 &&
+          this.getDifference(this.posX, this.target.posX) == 1)
+      ) {
+        this.eat(this.target);
+      } else {
+        this.move();
+      }
+    }
   }
 }
 
@@ -90,8 +132,14 @@ class Game {
     this.context = this.canvas.getContext("2d");
     this.cellsX = (WIDTH - (WIDTH % this.cellSize)) / this.cellSize;
     this.cellsY = (HEIGHT - (HEIGHT % this.cellSize)) / this.cellSize;
-    this.creatures = this.createCreatures();
+    this.creatures = this.createCreatures(10);
     this.plants = [];
+  }
+
+  clearCanvas() {
+    this.context.beginPath();
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.context.closePath();
   }
 
   createPlants(totalPlants) {
@@ -105,10 +153,10 @@ class Game {
     }
   }
 
-  createCreatures() {
+  createCreatures(totalCreatures) {
     const returnArray = [];
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < totalCreatures; i++) {
       returnArray.push(
         new Creature(
           Math.floor(Math.random() * (this.cellsX * this.cellsY)),
@@ -120,27 +168,11 @@ class Game {
     return returnArray;
   }
 
-  clearCanvas() {
-    this.context.beginPath();
-    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.context.closePath();
-  }
-
   drawLife() {
     this.context.beginPath();
 
-    this.context.fillStyle = WHITE;
-    this.creatures.forEach((creature) => {
-      this.context.fillRect(
-        creature.posX * this.cellSize,
-        creature.posY * this.cellSize,
-        this.cellSize,
-        this.cellSize
-      );
-    });
-
-    this.context.fillStyle = GREEN;
     this.plants.forEach((plant) => {
+      this.context.fillStyle = plant.life >= 10 ? GREEN : OLIVE;
       this.context.fillRect(
         plant.posX * this.cellSize,
         plant.posY * this.cellSize,
@@ -149,7 +181,52 @@ class Game {
       );
     });
 
+    this.creatures.forEach((creature) => {
+      this.context.fillStyle =
+        creature.rate == 1 ? WHITE : creature.rate == 2 ? PALE_RED : RED;
+      this.context.fillRect(
+        creature.posX * this.cellSize,
+        creature.posY * this.cellSize,
+        this.cellSize,
+        this.cellSize
+      );
+    });
+
     this.context.closePath();
+  }
+
+  creatureBirth(creature) {
+    let childX, childY;
+    const dir = Math.round(Math.random() * 3);
+
+    if (dir === 0) {
+      childX = creature.posX;
+      childY = creature.posY - 1;
+    } else if (dir === 1) {
+      childX = creature.posX + 1;
+      childY = creature.posY;
+    } else if (dir === 2) {
+      childX = creature.posX;
+      childY = creature.posY + 1;
+    } else if (dir === 3) {
+      childX = creature.posX - 1;
+      childY = creature.posY;
+    }
+
+    const childIndex = childY * this.cellsX + childX;
+
+    this.creatures.push(new Creature(childIndex, this.cellsX, creature.rate));
+    creature.life = 20;
+  }
+
+  creatureDeath(creature) {
+    this.creatures.splice(this.creatures.indexOf(creature), 1);
+  }
+
+  plantBirth(plant) {}
+
+  plantDeath(plant) {
+    this.plants.splice(this.plants.indexOf(plant), 1);
   }
 
   timePasses() {
@@ -157,24 +234,28 @@ class Game {
       creature.live(this.plants);
 
       if (creature.life === 0) {
-        this.creatures.splice(this.creatures.indexOf(creature), 1);
+        this.creatureDeath(creature);
+      } else if (creature.life >= 50) {
+        this.creatureBirth(creature);
       }
     });
 
     this.plants.forEach((plant) => {
-      plant.live();
-
-      if (plant.life === 0) {
-        this.plants.splice(this.plants.indexOf(plant), 1);
+      if (plant.life <= 0) {
+        this.plantDeath(plant);
       }
+
+      plant.live();
     });
   }
 
   gameLoop() {
     this.clearCanvas();
 
-    if (Math.random() > 0.75) {
-      this.createPlants(Math.ceil(Math.random() * 4) + 1);
+    if (Math.random() > 0.8) {
+      this.createPlants(
+        Math.round((this.cellsX * this.cellsY) / this.cellSize ** 3)
+      );
     }
 
     this.drawLife();
@@ -182,7 +263,9 @@ class Game {
   }
 
   run() {
-    this.createPlants(10);
+    this.createPlants(
+      Math.round((this.cellsX * this.cellsY) / this.cellSize ** 3)
+    );
 
     setInterval(() => {
       this.gameLoop();
@@ -190,5 +273,5 @@ class Game {
   }
 }
 
-const game = new Game(4, 6);
+const game = new Game(6, 6);
 game.run();
