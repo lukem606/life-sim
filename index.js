@@ -33,7 +33,7 @@ class Plant extends Cell {
   }
 }
 
-class Creature extends Cell {
+class Animal extends Cell {
   constructor(index, cellsX, rate = Math.round(Math.random() * 2) + 1) {
     super(index, cellsX);
     this.cellsX = cellsX;
@@ -67,10 +67,9 @@ class Creature extends Cell {
     }
   }
 
-  move(checkCell) {
+  move() {
     const xDif = this.getDifference(this.posX, this.target.posX);
     const yDif = this.getDifference(this.posY, this.target.posY);
-    let newX, newY;
 
     if (this.posX === this.target.posX) {
       this.dirX = 0;
@@ -89,29 +88,22 @@ class Creature extends Cell {
     }
 
     if (xDif < this.rate) {
-      newX += this.dirX * (xDif - 1);
+      this.posX += this.dirX * (xDif - 1);
     } else if (xDif == this.rate) {
-      newX += this.dirX * (this.rate - 1);
+      this.posX += this.dirX * (this.rate - 1);
     } else if (xDif > this.rate) {
-      newX += this.dirX * this.rate;
+      this.posX += this.dirX * this.rate;
     }
 
     if (yDif < this.rate) {
-      newY += this.dirY * (yDif - 1);
+      this.posY += this.dirY * (yDif - 1);
     } else if (yDif == this.rate) {
-      newY += this.dirY * (this.rate - 1);
+      this.posY += this.dirY * (this.rate - 1);
     } else if (yDif > this.rate) {
-      newY += this.dirY * this.rate;
+      this.posY += this.dirY * this.rate;
     }
 
-    const newIndex = newY * this.cellsX + newX;
-
-    if (checkCell(newIndex)) {
-      this.posX = newX;
-      this.posY = newY;
-      this.index = newIndex;
-    }
-
+    this.index = this.posY * this.cellsX + this.posX;
     this.life -= this.rate == 2 ? 2 : 1;
   }
 
@@ -124,7 +116,7 @@ class Creature extends Cell {
     }
   }
 
-  live(plants, checkCell) {
+  live(plants) {
     this.target = this.findClosestPlant(plants);
 
     if (this.target != null) {
@@ -137,7 +129,7 @@ class Creature extends Cell {
       ) {
         this.eat(this.target);
       } else {
-        this.move(checkCell);
+        this.move();
       }
     }
 
@@ -155,7 +147,7 @@ class Game {
     this.context = this.canvas.getContext("2d");
     this.cellsX = (WIDTH - (WIDTH % this.cellSize)) / this.cellSize;
     this.cellsY = (HEIGHT - (HEIGHT % this.cellSize)) / this.cellSize;
-    this.creatures = this.createCreatures(10);
+    this.animals = this.createAnimals(10);
     this.plants = [];
   }
 
@@ -170,36 +162,10 @@ class Game {
       this.plants.every((plant) => {
         return plant.index !== index;
       }) &&
-      this.creatures.every((creature) => {
-        return creature.index !== index;
+      this.animals.every((animal) => {
+        return animal.index !== index;
       })
     );
-  }
-
-  createPlants(totalPlants) {
-    for (let i = 0; i < totalPlants; i++) {
-      this.plants.push(
-        new Plant(
-          Math.floor(Math.random() * (this.cellsX * this.cellsY)),
-          this.cellsX
-        )
-      );
-    }
-  }
-
-  createCreatures(totalCreatures) {
-    const returnArray = [];
-
-    for (let i = 0; i < totalCreatures; i++) {
-      returnArray.push(
-        new Creature(
-          Math.floor(Math.random() * (this.cellsX * this.cellsY)),
-          this.cellsX
-        )
-      );
-    }
-
-    return returnArray;
   }
 
   drawLife() {
@@ -215,12 +181,12 @@ class Game {
       );
     });
 
-    this.creatures.forEach((creature) => {
+    this.animals.forEach((animal) => {
       this.context.fillStyle =
-        creature.rate == 1 ? WHITE : creature.rate == 2 ? PINK : RED;
+        animal.rate == 1 ? WHITE : animal.rate == 2 ? PINK : RED;
       this.context.fillRect(
-        creature.posX * this.cellSize,
-        creature.posY * this.cellSize,
+        animal.posX * this.cellSize,
+        animal.posY * this.cellSize,
         this.cellSize,
         this.cellSize
       );
@@ -229,32 +195,58 @@ class Game {
     this.context.closePath();
   }
 
-  creatureBirth(creature) {
+  createPlants(totalPlants) {
+    for (let i = 0; i < totalPlants; i++) {
+      this.plants.push(
+        new Plant(
+          Math.floor(Math.random() * (this.cellsX * this.cellsY)),
+          this.cellsX
+        )
+      );
+    }
+  }
+
+  createAnimals(totalAnimals) {
+    const returnArray = [];
+
+    for (let i = 0; i < totalAnimals; i++) {
+      returnArray.push(
+        new Animal(
+          Math.floor(Math.random() * (this.cellsX * this.cellsY)),
+          this.cellsX
+        )
+      );
+    }
+
+    return returnArray;
+  }
+
+  animalBirth(animal) {
     let childX, childY;
     const dir = Math.round(Math.random() * 3);
 
     if (dir === 0) {
-      childX = creature.posX;
-      childY = creature.posY - 1;
+      childX = animal.posX;
+      childY = animal.posY - 1;
     } else if (dir === 1) {
-      childX = creature.posX + 1;
-      childY = creature.posY;
+      childX = animal.posX + 1;
+      childY = animal.posY;
     } else if (dir === 2) {
-      childX = creature.posX;
-      childY = creature.posY + 1;
+      childX = animal.posX;
+      childY = animal.posY + 1;
     } else if (dir === 3) {
-      childX = creature.posX - 1;
-      childY = creature.posY;
+      childX = animal.posX - 1;
+      childY = animal.posY;
     }
 
     const childIndex = childY * this.cellsX + childX;
 
-    this.creatures.push(new Creature(childIndex, this.cellsX, creature.rate));
-    creature.life = 20;
+    this.animals.push(new Animal(childIndex, this.cellsX, animal.rate));
+    animal.life = 20;
   }
 
-  creatureDeath(creature) {
-    this.creatures.splice(this.creatures.indexOf(creature), 1);
+  animalDeath(animal) {
+    this.animals.splice(this.animals.indexOf(animal), 1);
   }
 
   plantBirth(plant) {
@@ -291,13 +283,13 @@ class Game {
   }
 
   timePasses() {
-    this.creatures.forEach((creature) => {
-      creature.live(this.plants, this.checkCellIsEmpty);
+    this.animals.forEach((animal) => {
+      animal.live(this.plants, this.animals, this.checkCellIsEmpty);
 
-      if (creature.life === 0 || creature.age >= 200) {
-        this.creatureDeath(creature);
-      } else if (creature.life >= 50) {
-        this.creatureBirth(creature);
+      if (animal.life === 0 || animal.age >= 200) {
+        this.animalDeath(animal);
+      } else if (animal.life >= 50) {
+        this.animalBirth(animal);
       }
     });
 
