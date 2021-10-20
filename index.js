@@ -1,145 +1,57 @@
 const PAD = 20;
-const WIDTH = window.innerWidth - PAD;
-const HEIGHT = window.innerHeight - PAD;
+const WIDTH = window.innerWidth - PAD * 2;
+const HEIGHT = window.innerHeight - PAD * 2;
 const WHITE = "rgb(255, 255, 255)";
 const BLACK = "rgb(0, 0, 0)";
 const RED = "rgb(200, 0, 0";
 const PINK = "rgb(255, 150, 150)";
 const GREEN = "rgb(3, 160, 98)";
 const OLIVE = "rgb(128, 128, 0)";
-document.querySelector("body").style.padding = `${PAD}px`;
+
+const SEARCH_ORIGINS = [
+  [0, -1],
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+];
+const SEARCH_DIRECTIONS = [
+  [1, 1],
+  [-1, +1],
+  [-1, -1],
+  [1, -1],
+];
 
 class Cell {
-  constructor(index, cellsX) {
-    this.index = index;
-    this.posX = index % cellsX;
-    this.posY = Math.floor(index / cellsX);
+  constructor(posX, posY) {
+    this.posX = posX;
+    this.posY = posY;
   }
 }
 
-class Plant extends Cell {
-  constructor(index, cellsX) {
-    super(index, cellsX);
-    this.life = 10;
-    this.split = false;
+class GridCell extends Cell {
+  constructor(posX, posY) {
+    super(posX, posY);
+    this.entity = null;
   }
 
-  live() {
-    if (this.split) {
-      this.life -= 1;
-    } else {
-      this.life += 1;
-    }
-  }
-}
-
-class Animal extends Cell {
-  constructor(index, cellsX, rate = Math.round(Math.random() * 2) + 1) {
-    super(index, cellsX);
-    this.cellsX = cellsX;
-    this.dirX = 0;
-    this.dirY = 0;
-    this.rate = rate;
-    this.life = 20;
-    this.age = 0;
+  getSearchOrigins(distance) {
+    return SEARCH_ORIGINS.map((origin) => {
+      return {
+        posX: this.posX + distance * origin[0],
+        posY: this.posY + distance * origin[1],
+      };
+    });
   }
 
-  getDifference(self, other) {
-    return Math.abs(self - other);
-  }
-
-  getDistance(plant) {
-    return (
-      this.getDifference(this.posX, plant.posX) +
-      this.getDifference(this.posY, plant.posY)
-    );
-  }
-
-  findClosestPlant(plants) {
-    if (plants.length >= 1) {
-      return plants.reduce((previous, current) => {
-        return this.getDistance(previous) <= this.getDistance(current)
-          ? previous
-          : current;
-      });
-    } else {
-      return null;
-    }
-  }
-
-  move() {
-    const xDif = this.getDifference(this.posX, this.target.posX);
-    const yDif = this.getDifference(this.posY, this.target.posY);
-
-    if (this.posX === this.target.posX) {
-      this.dirX = 0;
-    } else if (this.posX < this.target.posX) {
-      this.dirX = 1;
-    } else if (this.posX > this.target.posX) {
-      this.dirX = -1;
-    }
-
-    if (this.posY === this.target.posY) {
-      this.dirY = 0;
-    } else if (this.posY < this.target.posY) {
-      this.dirY = 1;
-    } else if (this.posY > this.target.posY) {
-      this.dirY = -1;
-    }
-
-    if (xDif < this.rate) {
-      this.posX += this.dirX * (xDif - 1);
-    } else if (xDif == this.rate) {
-      this.posX += this.dirX * (this.rate - 1);
-    } else if (xDif > this.rate) {
-      this.posX += this.dirX * this.rate;
-    }
-
-    if (yDif < this.rate) {
-      this.posY += this.dirY * (yDif - 1);
-    } else if (yDif == this.rate) {
-      this.posY += this.dirY * (this.rate - 1);
-    } else if (yDif > this.rate) {
-      this.posY += this.dirY * this.rate;
-    }
-
-    this.index = this.posY * this.cellsX + this.posX;
-    this.life -= this.rate == 2 ? 2 : 1;
-  }
-
-  eat(plant) {
-    if (plant.life >= 1) {
-      this.life += plant.life < 10 ? plant.life : 10;
-      plant.life = 0;
-    } else {
-      this.life -= this.rate == 2 ? 2 : 1;
-    }
-  }
-
-  live(plants) {
-    this.target = this.findClosestPlant(plants);
-
-    if (this.target != null) {
-      if (
-        this.getDistance(this.target) <= 1 ||
-        (this.getDifference(this.posX, this.target.posX) == 1 &&
-          this.getDifference(this.posX, this.target.posX) == 1) ||
-        (this.getDifference(this.posX, this.target.posX) == 1 &&
-          this.getDifference(this.posX, this.target.posX) == 1)
-      ) {
-        this.eat(this.target);
-      } else {
-        this.move();
-      }
-    }
-
-    this.age += 1;
+  addAnimalToCell(animal) {
+    animal.posX = this.posX;
+    animal.posY = this.posY;
+    this.entity = animal;
   }
 }
 
-class Game {
-  constructor(fps, cellSize) {
-    this.fps = fps;
+class Grid {
+  constructor(cellSize) {
     this.cellSize = cellSize;
     this.canvas = document.getElementById("gameCanvas");
     this.canvas.height = HEIGHT;
@@ -147,186 +59,531 @@ class Game {
     this.context = this.canvas.getContext("2d");
     this.cellsX = (WIDTH - (WIDTH % this.cellSize)) / this.cellSize;
     this.cellsY = (HEIGHT - (HEIGHT % this.cellSize)) / this.cellSize;
-    this.animals = this.createAnimals(10);
-    this.plants = [];
+    this.cells = this.createGrid();
   }
 
-  clearCanvas() {
-    this.context.beginPath();
-    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.context.closePath();
+  createGrid() {
+    const cells = {};
+    for (let posY = 0; posY < this.cellsY; posY++) {
+      for (let posX = 0; posX < this.cellsX; posX++) {
+        cells[`X${posX}Y${posY}`] = new GridCell(posX, posY);
+      }
+    }
+    return cells;
   }
 
-  checkCellIsEmpty(index) {
-    return (
-      this.plants.every((plant) => {
-        return plant.index !== index;
-      }) &&
-      this.animals.every((animal) => {
-        return animal.index !== index;
+  getCellFromXY(x, y) {
+    return this.cells[this.getGridLabelFromXY(x, y)];
+  }
+
+  cellIsEmpty(x, y) {
+    return this.getCellFromXY(x, y).entity == null;
+  }
+
+  getGridLabelFromXY(x, y) {
+    return `X${x}Y${y}`;
+  }
+
+  getRandomPosX() {
+    return Math.round(Math.random() * (this.cellsX - 1));
+  }
+
+  getRandomPosY() {
+    return Math.round(Math.random() * (this.cellsY - 1));
+  }
+
+  getCellsWithinSearchArea(cell, distance) {
+    const cells = [];
+    const origins = cell.getSearchOrigins(distance);
+
+    for (let distanceIndex = 0; distanceIndex < distance; distanceIndex++) {
+      cells.push(...this.getCellsAtDistanceFromOrigins(distanceIndex, origins));
+    }
+
+    return cells.filter((cell) => {
+      return cell !== undefined;
+    });
+  }
+
+  getCellsAtDistanceFromOrigins(distanceIndex, origins) {
+    return origins.map((origin, directionIndex) => {
+      const newPosX =
+        origin.posX + distanceIndex * SEARCH_DIRECTIONS[directionIndex][0];
+      const newPosY =
+        origin.posY + distanceIndex * SEARCH_DIRECTIONS[directionIndex][1];
+
+      return this.getCellFromXY(newPosX, newPosY);
+    });
+  }
+}
+
+class Plant extends Cell {
+  constructor(posX, posY) {
+    super(posX, posY);
+    this.energy = Math.round(Math.random() * 10) + 10;
+    this.split = false;
+  }
+
+  energyIsZero() {
+    if (this.energy <= 0) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+}
+
+class Animal extends Cell {
+  constructor(
+    posX,
+    posY,
+    rate = Math.round(Math.random() * 2) + 1,
+    range = Math.round(Math.random() * 10) + 10
+  ) {
+    super(posX, posY);
+    this.dirX = 0;
+    this.dirY = 0;
+    this.name = this.getRandomNumber();
+    this.energy = 10;
+    this.rate = rate;
+    this.range = range;
+    this.target = null;
+  }
+
+  getRandomNumber() {
+    return Array(4)
+      .fill(1)
+      .map((number) => {
+        return Math.round(Math.random() * 9);
       })
+      .join("");
+  }
+
+  energyIsZero() {
+    if (this.energy <= 0) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  hasValidTarget() {
+    if (
+      this.target == null ||
+      this.target.entity == null ||
+      this.target.entity.energy <= 0
+    ) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  canReachTarget() {
+    if (
+      this.getDistanceToTarget() <= 1 ||
+      (this.getDifferenceBetweenTwoNumbers(this.posX, this.target.posX) == 1 &&
+        this.getDifferenceBetweenTwoNumbers(this.posY, this.target.posY) == 1)
+    ) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  getDistanceToTarget() {
+    return (
+      this.getDifferenceBetweenTwoNumbers(this.posX, this.target.posX) +
+      this.getDifferenceBetweenTwoNumbers(this.posY, this.target.posY)
     );
   }
 
-  drawLife() {
-    this.context.beginPath();
+  getDifferenceBetweenTwoNumbers(x, y) {
+    return Math.abs(x - y);
+  }
 
-    this.plants.forEach((plant) => {
-      this.context.fillStyle = plant.life >= 10 ? GREEN : OLIVE;
-      this.context.fillRect(
-        plant.posX * this.cellSize,
-        plant.posY * this.cellSize,
-        this.cellSize,
-        this.cellSize
-      );
-    });
+  expendsEnergy() {
+    this.energy -= this.rate === 3 ? 2 : 1;
+  }
 
-    this.animals.forEach((animal) => {
-      this.context.fillStyle =
-        animal.rate == 1 ? WHITE : animal.rate == 2 ? PINK : RED;
-      this.context.fillRect(
-        animal.posX * this.cellSize,
-        animal.posY * this.cellSize,
-        this.cellSize,
-        this.cellSize
-      );
-    });
+  consumesPlant() {
+    this.energy +=
+      this.target.entity.energy < 10 ? this.target.entity.energy : 10;
+  }
 
-    this.context.closePath();
+  clearTarget() {
+    this.target = null;
+  }
+
+  getNextCellPosition() {
+    this.setDirections();
+    const newPosX = this.getNextPositionX();
+    const newPosY = this.getNextPositionY();
+
+    return { newPosX: newPosX, newPosY: newPosY };
+  }
+
+  setDirections() {
+    this.setDirX();
+    this.setDirY();
+  }
+
+  setDirX() {
+    if (this.posX === this.target.posX) {
+      this.dirX = 0;
+    } else if (this.posX < this.target.posX) {
+      this.dirX = 1;
+    } else if (this.posX > this.target.posX) {
+      this.dirX = -1;
+    }
+  }
+
+  setDirY() {
+    if (this.posY === this.target.posY) {
+      this.dirY = 0;
+    } else if (this.posY < this.target.posY) {
+      this.dirY = 1;
+    } else if (this.posY > this.target.posY) {
+      this.dirY = -1;
+    }
+  }
+
+  getNextPositionX() {
+    const differenceInX = this.getDifferenceBetweenTwoNumbers(
+      this.posX,
+      this.target.posX
+    );
+
+    const newPosX = this.posX + this.getUpdatedPosX(differenceInX);
+    return newPosX;
+  }
+
+  getUpdatedPosX(difference) {
+    if (difference < this.rate) {
+      return this.dirX * (difference - 1);
+    } else if (difference == this.rate) {
+      return this.dirX * (this.rate - 1);
+    } else if (difference > this.rate) {
+      return this.dirX * this.rate;
+    }
+  }
+
+  getNextPositionY() {
+    const differenceInY = this.getDifferenceBetweenTwoNumbers(
+      this.posY,
+      this.target.posY
+    );
+
+    const newPosY = this.posY + this.getUpdatedPosY(differenceInY);
+    return newPosY;
+  }
+
+  getUpdatedPosY(difference) {
+    if (difference < this.rate) {
+      return this.dirY * (difference - 1);
+    } else if (difference == this.rate) {
+      return this.dirY * (this.rate - 1);
+    } else if (difference > this.rate) {
+      return this.dirY * this.rate;
+    }
+  }
+}
+
+class Game {
+  constructor(fps, cellSize) {
+    this.fps = fps;
+    this.grid = new Grid(cellSize);
+    this.plants = [];
+    this.animals = [];
+    this.plantCellsToUpdate = [];
+    this.animalCellsToUpdate = [];
+    this.cellsToRemove = [];
+  }
+
+  run() {
+    this.setup();
+    // this.renderUpdates();
+    this.running = this.getGameIntervalObject();
+  }
+
+  setup() {
+    this.createPlants(this.getNumberOfPlants());
+    this.createAnimals(this.getNumberOfAnimals());
+  }
+
+  getNumberOfPlants() {
+    return (this.grid.cellsX * this.grid.cellsY) / this.grid.cellSize ** 2;
+  }
+
+  getNumberOfAnimals() {
+    return (this.grid.cellsX * this.grid.cellsY) / this.grid.cellSize ** 3;
   }
 
   createPlants(totalPlants) {
     for (let i = 0; i < totalPlants; i++) {
-      this.plants.push(
-        new Plant(
-          Math.floor(Math.random() * (this.cellsX * this.cellsY)),
-          this.cellsX
-        )
-      );
+      const posX = this.grid.getRandomPosX();
+      const posY = this.grid.getRandomPosY();
+      this.createPlantIfCellEmpty(posX, posY);
     }
+  }
+
+  createPlantIfCellEmpty(posX, posY) {
+    if (this.grid.cellIsEmpty(posX, posY)) {
+      this.createPlantInCell(posX, posY);
+    }
+  }
+
+  createPlantInCell(posX, posY) {
+    const plant = new Plant(posX, posY);
+    const gridCell = this.grid.getCellFromXY(posX, posY);
+
+    gridCell.entity = plant;
+    this.plants.push(plant);
+    this.plantCellsToUpdate.push(gridCell);
   }
 
   createAnimals(totalAnimals) {
-    const returnArray = [];
-
     for (let i = 0; i < totalAnimals; i++) {
-      returnArray.push(
-        new Animal(
-          Math.floor(Math.random() * (this.cellsX * this.cellsY)),
-          this.cellsX
-        )
-      );
-    }
-
-    return returnArray;
-  }
-
-  animalBirth(animal) {
-    let childX, childY;
-    const dir = Math.round(Math.random() * 3);
-
-    if (dir === 0) {
-      childX = animal.posX;
-      childY = animal.posY - 1;
-    } else if (dir === 1) {
-      childX = animal.posX + 1;
-      childY = animal.posY;
-    } else if (dir === 2) {
-      childX = animal.posX;
-      childY = animal.posY + 1;
-    } else if (dir === 3) {
-      childX = animal.posX - 1;
-      childY = animal.posY;
-    }
-
-    const childIndex = childY * this.cellsX + childX;
-
-    this.animals.push(new Animal(childIndex, this.cellsX, animal.rate));
-    animal.life = 20;
-  }
-
-  animalDeath(animal) {
-    this.animals.splice(this.animals.indexOf(animal), 1);
-  }
-
-  plantBirth(plant) {
-    let childX, childY;
-    const dir = Math.round(Math.random() * 3);
-
-    if (dir === 0) {
-      childX = plant.posX;
-      childY = plant.posY - 1;
-    } else if (dir === 1) {
-      childX = plant.posX + 1;
-      childY = plant.posY;
-    } else if (dir === 2) {
-      childX = plant.posX;
-      childY = plant.posY + 1;
-    } else if (dir === 3) {
-      childX = plant.posX - 1;
-      childY = plant.posY;
-    }
-
-    const childIndex = childY * this.cellsX + childX;
-
-    if (this.checkCellIsEmpty(childIndex)) {
-      this.plants.push(new Plant(childIndex, this.cellsX));
-    }
-
-    if (plant.life >= 50) {
-      plant.split = true;
+      const posX = this.grid.getRandomPosX();
+      const posY = this.grid.getRandomPosY();
+      this.createAnimalIfCellEmpty(posX, posY);
     }
   }
 
-  plantDeath(plant) {
-    this.plants.splice(this.plants.indexOf(plant), 1);
+  createAnimalIfCellEmpty(posX, posY) {
+    if (this.grid.cellIsEmpty(posX, posY)) {
+      this.createAnimalInCell(posX, posY);
+    }
   }
 
-  timePasses() {
-    this.animals.forEach((animal) => {
-      animal.live(this.plants, this.animals, this.checkCellIsEmpty);
+  createAnimalInCell(posX, posY) {
+    const animal = new Animal(posX, posY);
+    const gridCell = this.grid.getCellFromXY(posX, posY);
 
-      if (animal.life === 0 || animal.age >= 200) {
-        this.animalDeath(animal);
-      } else if (animal.life >= 50) {
-        this.animalBirth(animal);
+    gridCell.entity = animal;
+    this.animals.push(animal);
+    this.animalCellsToUpdate.push(gridCell);
+  }
+
+  getGameIntervalObject() {
+    setInterval(() => {
+      try {
+        this.gameLoop();
+      } catch (e) {
+        console.log(e);
+        clearInterval(this.running);
       }
-    });
-
-    this.plants.forEach((plant) => {
-      if (plant.life <= 0) {
-        this.plantDeath(plant);
-      } else if (plant.life % 20 === 0) {
-        this.plantBirth(plant);
-      }
-
-      plant.live();
-    });
+    }, 1000 / this.fps);
   }
 
   gameLoop() {
-    this.clearCanvas();
-
-    if (Math.random() > 2) {
-      this.createPlants(
-        Math.round((this.cellsX * this.cellsY) / this.cellSize ** 5)
-      );
-    }
-
-    this.drawLife();
-    this.timePasses();
+    this.renderUpdates();
+    this.clearRenderArrays();
+    this.updateAllAnimals();
+    this.updateAllPlants();
   }
 
-  run() {
-    this.createPlants(
-      Math.round((this.cellsX * this.cellsY) / this.cellSize ** 3)
-    );
+  renderUpdates() {
+    this.grid.context.beginPath();
 
-    setInterval(() => {
-      this.gameLoop();
-    }, 1000 / this.fps);
+    this.renderClearedCells();
+    this.renderUpdatedPlants();
+    this.renderUpdatedAnimals();
+
+    this.grid.context.closePath();
+  }
+
+  renderClearedCells() {
+    this.cellsToRemove.forEach((cell) => {
+      this.clearCell(cell);
+    });
+  }
+
+  clearCell(cell) {
+    this.grid.context.clearRect(
+      cell.posX * this.grid.cellSize,
+      cell.posY * this.grid.cellSize,
+      this.grid.cellSize,
+      this.grid.cellSize
+    );
+  }
+
+  renderUpdatedPlants() {
+    this.plantCellsToUpdate.forEach((cell) => {
+      this.renderPlant(cell);
+    });
+  }
+
+  renderPlant(cell) {
+    this.grid.context.fillStyle = cell.entity.energy >= 10 ? GREEN : OLIVE;
+    this.grid.context.fillRect(
+      cell.posX * this.grid.cellSize,
+      cell.posY * this.grid.cellSize,
+      this.grid.cellSize,
+      this.grid.cellSize
+    );
+  }
+
+  renderUpdatedAnimals() {
+    this.animalCellsToUpdate.forEach((cell) => {
+      this.renderAnimal(cell);
+    });
+  }
+
+  renderAnimal(cell) {
+    this.grid.context.fillStyle =
+      cell.entity.rate === 3 ? RED : cell.entity.rate === 2 ? PINK : WHITE;
+    this.grid.context.fillRect(
+      cell.posX * this.grid.cellSize,
+      cell.posY * this.grid.cellSize,
+      this.grid.cellSize,
+      this.grid.cellSize
+    );
+  }
+
+  clearRenderArrays() {
+    this.cellsToRemove = [];
+    this.plantCellsToUpdate = [];
+    this.animalCellsToUpdate = [];
+  }
+
+  updateAllAnimals() {
+    this.animals.forEach((animal) => {
+      this.updateAnimal(animal);
+    });
+  }
+
+  updateAnimal(animal) {
+    if (animal.energyIsZero()) {
+      this.animalDies(animal);
+    } else {
+      this.animalLives(animal);
+    }
+  }
+
+  animalDies(animal) {
+    this.clearGridCell(this.grid.getCellFromXY(animal.posX, animal.posY));
+    this.removeAnimalFromArray(animal);
+  }
+
+  clearGridCell(gridCell) {
+    gridCell.entity = null;
+    this.cellsToRemove.push(gridCell);
+  }
+
+  removeAnimalFromArray(animal) {
+    this.animals.splice(this.animals.indexOf(animal), 1);
+  }
+
+  animalLives(animal) {
+    if (animal.hasValidTarget()) {
+      this.animalActsOnTarget(animal);
+    } else {
+      this.animalFindsNewTarget(animal);
+      animal.expendsEnergy();
+    }
+  }
+
+  animalActsOnTarget(animal) {
+    if (animal.canReachTarget()) {
+      this.animalEatsTarget(animal);
+    } else {
+      this.animalMoves(animal);
+    }
+  }
+
+  animalEatsTarget(animal) {
+    if (animal.hasValidTarget()) {
+      animal.consumesPlant();
+      this.plantDies(animal.target.entity);
+      animal.clearTarget();
+    } else {
+      animal.expendsEnergy();
+      animal.clearTarget();
+    }
+  }
+
+  plantDies(plant) {
+    this.clearGridCell(this.grid.getCellFromXY(plant.posX, plant.posY));
+    this.removePlantFromArray(plant);
+  }
+
+  removePlantFromArray(plant) {
+    this.plants.splice(this.plants.indexOf(plant), 1);
+  }
+
+  animalMoves(animal) {
+    this.calculateAnimalMove(animal);
+    animal.expendsEnergy();
+  }
+
+  calculateAnimalMove(animal) {
+    const nextCell = this.getNextCell(animal);
+
+    if (this.grid.cellIsEmpty(nextCell.posX, nextCell.posY)) {
+      this.animalMovesToNextCell(animal, nextCell);
+    }
+  }
+
+  getNextCell(animal) {
+    const { newPosX, newPosY } = animal.getNextCellPosition();
+    const newCell = this.grid.getCellFromXY(newPosX, newPosY);
+    return newCell;
+  }
+
+  animalMovesToNextCell(animal, nextCell) {
+    const previousCell = this.grid.getCellFromXY(animal.posX, animal.posY);
+
+    nextCell.addAnimalToCell(animal);
+    this.animalCellsToUpdate.push(nextCell);
+
+    this.clearGridCell(previousCell);
+  }
+
+  animalFindsNewTarget(animal) {
+    animal.target = this.getClosestPlant(animal);
+  }
+
+  getClosestPlant(animal) {
+    for (let rangeIndex = 1; rangeIndex <= animal.range; rangeIndex++) {
+      const cells = this.grid.getCellsWithinSearchArea(
+        this.grid.getCellFromXY(animal.posX, animal.posY),
+        rangeIndex
+      );
+
+      const plants = cells.filter((cell) => {
+        return cell.entity instanceof Plant;
+      });
+
+      if (plants.length === 1) {
+        return plants[0];
+      } else if (plants.length > 1) {
+        return plants[Math.round(Math.random() * (plants.length - 1))];
+      }
+    }
+  }
+
+  updateAllPlants() {
+    this.plants.forEach((plant) => {
+      if (plant.energy >= 50) {
+        plant.split = true;
+      } else if (plant.energy <= 0) {
+        this.plantDies(plant);
+      }
+
+      if (plant.split) {
+        plant.energy -= 1;
+      } else {
+        plant.energy += 1;
+      }
+    });
   }
 }
 
-const game = new Game(6, 6);
+document.querySelector("body").style.padding = `${PAD}px`;
+// document.addEventListener("click", () => {
+//   console.log(game.plants);
+// });
+
+const game = new Game(4, 6);
 game.run();
