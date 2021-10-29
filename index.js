@@ -1,3 +1,5 @@
+// const Game = require("./Game");
+
 const PAD = 20;
 const WIDTH = window.innerWidth - PAD * 2;
 const HEIGHT = window.innerHeight - PAD * 2;
@@ -73,15 +75,11 @@ class Grid {
   }
 
   getCellFromXY(x, y) {
-    return this.cells[this.getGridLabelFromXY(x, y)];
+    return this.cells[`X${x}Y${y}`];
   }
 
   cellIsEmpty(x, y) {
     return this.getCellFromXY(x, y).entity == null;
-  }
-
-  getGridLabelFromXY(x, y) {
-    return `X${x}Y${y}`;
   }
 
   getRandomPosX() {
@@ -90,6 +88,14 @@ class Grid {
 
   getRandomPosY() {
     return Math.round(Math.random() * (this.cellsY - 1));
+  }
+
+  getNumberOfPlants() {
+    return (this.cellsX * this.cellsY) / this.cellSize ** 2;
+  }
+
+  getNumberOfAnimals() {
+    return (this.cellsX * this.cellsY) / this.cellSize ** 3;
   }
 
   getCellsWithinSearchArea(cell, distance) {
@@ -115,6 +121,24 @@ class Grid {
       return this.getCellFromXY(newPosX, newPosY);
     });
   }
+
+  getRandomNeighbourPosition(posX, posY) {
+    const choiceXY = Math.random();
+    const choicePosNeg = Math.random();
+    const newX =
+      posX + (choiceXY > 0.5 ? 1 : 0) * (choicePosNeg > 0.5 ? 1 : -1);
+    const newY =
+      posY + (choiceXY > 0.5 ? 0 : 1) * (choicePosNeg > 0.5 ? 1 : -1);
+    return { posX: newX, posY: newY };
+  }
+
+  isValidCell(posX, posY) {
+    if (posX >= 0 && posX < this.cellsX && posY >= 0 && posY < this.cellsY) {
+      return true;
+    } else {
+      false;
+    }
+  }
 }
 
 class Plant extends Cell {
@@ -134,29 +158,15 @@ class Plant extends Cell {
 }
 
 class Animal extends Cell {
-  constructor(
-    posX,
-    posY,
-    rate = Math.round(Math.random() * 2) + 1,
-    range = Math.round(Math.random() * 10) + 10
-  ) {
+  constructor(posX, posY, rate, range) {
     super(posX, posY);
     this.dirX = 0;
     this.dirY = 0;
-    this.name = this.getRandomNumber();
+    this.age = 0;
     this.energy = 10;
-    this.rate = rate;
-    this.range = range;
+    this.rate = rate === null ? Math.round(Math.random() * 2) + 1 : rate;
+    this.range = range === null ? Math.round(Math.random() * 10) + 10 : range;
     this.target = null;
-  }
-
-  getRandomNumber() {
-    return Array(4)
-      .fill(1)
-      .map((number) => {
-        return Math.round(Math.random() * 9);
-      })
-      .join("");
   }
 
   energyIsZero() {
@@ -164,6 +174,14 @@ class Animal extends Cell {
       return true;
     } else {
       return false;
+    }
+  }
+
+  isOld() {
+    if (this.age === 80) {
+      return true;
+    } else {
+      return;
     }
   }
 
@@ -287,6 +305,14 @@ class Animal extends Cell {
       return this.dirY * this.rate;
     }
   }
+
+  getRandomNeighbourPosition() {
+    const choiceXY = Math.random();
+    const choicePosNeg = Math.random();
+    const posY = (choiceXY > 0.5 ? 1 : 0) * (choicePosNeg > 0.5 ? 1 : -1);
+    const posX = (choiceXY > 0.5 ? 0 : 1) * (choicePosNeg > 0.5 ? 1 : -1);
+    return { posX: posX, posY: posY };
+  }
 }
 
 class Game {
@@ -302,34 +328,28 @@ class Game {
 
   run() {
     this.setup();
-    // this.renderUpdates();
     this.running = this.getGameIntervalObject();
   }
 
   setup() {
-    this.createPlants(this.getNumberOfPlants());
-    this.createAnimals(this.getNumberOfAnimals());
-  }
-
-  getNumberOfPlants() {
-    return (this.grid.cellsX * this.grid.cellsY) / this.grid.cellSize ** 2;
-  }
-
-  getNumberOfAnimals() {
-    return (this.grid.cellsX * this.grid.cellsY) / this.grid.cellSize ** 3;
+    this.createPlants(this.grid.getNumberOfPlants());
+    this.createAnimals(this.grid.getNumberOfAnimals());
   }
 
   createPlants(totalPlants) {
     for (let i = 0; i < totalPlants; i++) {
       const posX = this.grid.getRandomPosX();
       const posY = this.grid.getRandomPosY();
+
       this.createPlantIfCellEmpty(posX, posY);
     }
   }
 
   createPlantIfCellEmpty(posX, posY) {
-    if (this.grid.cellIsEmpty(posX, posY)) {
-      this.createPlantInCell(posX, posY);
+    if (this.grid.isValidCell(posX, posY)) {
+      if (this.grid.cellIsEmpty(posX, posY)) {
+        this.createPlantInCell(posX, posY);
+      }
     }
   }
 
@@ -346,18 +366,20 @@ class Game {
     for (let i = 0; i < totalAnimals; i++) {
       const posX = this.grid.getRandomPosX();
       const posY = this.grid.getRandomPosY();
-      this.createAnimalIfCellEmpty(posX, posY);
+      this.createAnimalIfCellEmpty(posX, posY, null, null);
     }
   }
 
-  createAnimalIfCellEmpty(posX, posY) {
-    if (this.grid.cellIsEmpty(posX, posY)) {
-      this.createAnimalInCell(posX, posY);
+  createAnimalIfCellEmpty(posX, posY, rate, range) {
+    if (this.grid.isValidCell(posX, posY)) {
+      if (this.grid.cellIsEmpty(posX, posY)) {
+        this.createAnimalInCell(posX, posY, rate, range);
+      }
     }
   }
 
-  createAnimalInCell(posX, posY) {
-    const animal = new Animal(posX, posY);
+  createAnimalInCell(posX, posY, rate, range) {
+    const animal = new Animal(posX, posY, rate, range);
     const gridCell = this.grid.getCellFromXY(posX, posY);
 
     gridCell.entity = animal;
@@ -426,7 +448,12 @@ class Game {
 
   renderUpdatedAnimals() {
     this.animalCellsToUpdate.forEach((cell) => {
-      this.renderAnimal(cell);
+      try {
+        this.renderAnimal(cell);
+      } catch (error) {
+        console.log(error);
+        console.log(cell);
+      }
     });
   }
 
@@ -449,16 +476,23 @@ class Game {
 
   updateAllAnimals() {
     this.animals.forEach((animal) => {
-      this.updateAnimal(animal);
-    });
-  }
+      if (animal.energyIsZero() || animal.isOld()) {
+        this.animalDies(animal);
+      } else {
+        this.animalLives(animal);
+      }
 
-  updateAnimal(animal) {
-    if (animal.energyIsZero()) {
-      this.animalDies(animal);
-    } else {
-      this.animalLives(animal);
-    }
+      if (animal.energy >= 50) {
+        const { posX, posY } = this.grid.getRandomNeighbourPosition(
+          animal.posX,
+          animal.posY
+        );
+        this.createAnimalIfCellEmpty(posX, posY, animal.rate, animal.range);
+        animal.energy = 10;
+      }
+
+      animal.age += 1;
+    });
   }
 
   animalDies(animal) {
@@ -565,18 +599,38 @@ class Game {
 
   updateAllPlants() {
     this.plants.forEach((plant) => {
-      if (plant.energy >= 50) {
-        plant.split = true;
-      } else if (plant.energy <= 0) {
+      if (plant.energyIsZero()) {
         this.plantDies(plant);
-      }
-
-      if (plant.split) {
-        plant.energy -= 1;
       } else {
-        plant.energy += 1;
+        this.updatePlant(plant);
       }
     });
+  }
+
+  updatePlant(plant) {
+    if (plant.energy >= 50) {
+      plant.split = true;
+    } else if (plant.energy % 20 === 0 && !plant.split) {
+      this.birthPlant(plant);
+    } else if (plant.energy === 9) {
+      this.plantCellsToUpdate.push(
+        this.grid.getCellFromXY(plant.posX, plant.posY)
+      );
+    }
+
+    if (plant.split) {
+      plant.energy -= 1;
+    } else {
+      plant.energy += 1;
+    }
+  }
+
+  birthPlant(plant) {
+    const { posX, posY } = this.grid.getRandomNeighbourPosition(
+      plant.posX,
+      plant.posY
+    );
+    this.createPlantIfCellEmpty(posX, posY);
   }
 }
 
