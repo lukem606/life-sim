@@ -1,9 +1,13 @@
 // const Game = require("./Game");
 
+let COUNTER = 0;
 const PAD = 20;
-const WIDTH = window.innerWidth - PAD * 2;
 const HEIGHT = window.innerHeight - PAD * 2;
+const WIDTH = window.innerWidth - PAD * 2;
+// const HEIGHT = 300;
+// const WIDTH = 300;
 const WHITE = "rgb(255, 255, 255)";
+const PALE_GREY = "rgb(20, 20, 20)";
 const BLACK = "rgb(0, 0, 0)";
 const RED = "rgb(200, 0, 0";
 const PINK = "rgb(255, 150, 150)";
@@ -61,6 +65,7 @@ class Grid {
     this.context = this.canvas.getContext("2d");
     this.cellsX = (WIDTH - (WIDTH % this.cellSize)) / this.cellSize;
     this.cellsY = (HEIGHT - (HEIGHT % this.cellSize)) / this.cellSize;
+    this.lineCells = [];
     this.cells = this.createGrid();
   }
 
@@ -68,7 +73,11 @@ class Grid {
     const cells = {};
     for (let posY = 0; posY < this.cellsY; posY++) {
       for (let posX = 0; posX < this.cellsX; posX++) {
-        cells[`X${posX}Y${posY}`] = new GridCell(posX, posY);
+        const newCell = new GridCell(posX, posY);
+        cells[`X${posX}Y${posY}`] = newCell;
+        if (posX % 10 === 0 || posY % 10 === 0) {
+          this.lineCells.push(newCell);
+        }
       }
     }
     return cells;
@@ -334,6 +343,7 @@ class Game {
   setup() {
     this.createPlants(this.grid.getNumberOfPlants());
     this.createAnimals(this.grid.getNumberOfAnimals());
+    this.renderLines();
   }
 
   createPlants(totalPlants) {
@@ -354,12 +364,16 @@ class Game {
   }
 
   createPlantInCell(posX, posY) {
-    const plant = new Plant(posX, posY);
+    const newPlant = new Plant(posX, posY);
+    console.log(newPlant);
     const gridCell = this.grid.getCellFromXY(posX, posY);
+    console.log(gridCell);
 
-    gridCell.entity = plant;
-    this.plants.push(plant);
+    gridCell.entity = newPlant;
+    console.log(gridCell);
+    this.plants.push(newPlant);
     this.plantCellsToUpdate.push(gridCell);
+    console.log(gridCell);
   }
 
   createAnimals(totalAnimals) {
@@ -379,16 +393,32 @@ class Game {
   }
 
   createAnimalInCell(posX, posY, rate, range) {
-    const animal = new Animal(posX, posY, rate, range);
+    const newAnimal = new Animal(posX, posY, rate, range);
+    console.log(newAnimal);
     const gridCell = this.grid.getCellFromXY(posX, posY);
+    console.log(gridCell);
 
-    gridCell.entity = animal;
-    this.animals.push(animal);
+    gridCell.entity = newAnimal;
+    console.log(gridCell);
+    this.animals.push(newAnimal);
     this.animalCellsToUpdate.push(gridCell);
+    console.log(gridCell);
+  }
+
+  renderLines() {
+    this.grid.lineCells.forEach((cell) => {
+      this.grid.context.fillStyle = PALE_GREY;
+      this.grid.context.fillRect(
+        cell.posX * this.grid.cellSize,
+        cell.posY * this.grid.cellSize,
+        this.grid.cellSize,
+        this.grid.cellSize
+      );
+    });
   }
 
   getGameIntervalObject() {
-    setInterval(() => {
+    return setInterval(() => {
       try {
         this.gameLoop();
       } catch (e) {
@@ -401,8 +431,8 @@ class Game {
   gameLoop() {
     this.renderUpdates();
     this.clearRenderArrays();
-    this.updateAllAnimals();
     this.updateAllPlants();
+    this.updateAllAnimals();
   }
 
   renderUpdates() {
@@ -417,22 +447,41 @@ class Game {
 
   renderClearedCells() {
     this.cellsToRemove.forEach((cell) => {
-      this.clearCell(cell);
+      if (cell.entity == null) {
+        this.clearCell(cell);
+      }
     });
   }
 
   clearCell(cell) {
-    this.grid.context.clearRect(
-      cell.posX * this.grid.cellSize,
-      cell.posY * this.grid.cellSize,
-      this.grid.cellSize,
-      this.grid.cellSize
-    );
+    if (cell.posX % 10 === 0 || cell.posY % 10 === 0) {
+      this.grid.context.fillStyle = PALE_GREY;
+      this.grid.context.fillRect(
+        cell.posX * this.grid.cellSize,
+        cell.posY * this.grid.cellSize,
+        this.grid.cellSize,
+        this.grid.cellSize
+      );
+    } else {
+      this.grid.context.clearRect(
+        cell.posX * this.grid.cellSize,
+        cell.posY * this.grid.cellSize,
+        this.grid.cellSize,
+        this.grid.cellSize
+      );
+    }
   }
 
   renderUpdatedPlants() {
     this.plantCellsToUpdate.forEach((cell) => {
-      this.renderPlant(cell);
+      try {
+        console.log(cell);
+        this.renderPlant(cell);
+      } catch (error) {
+        console.log(error);
+        console.log(cell);
+        clearInterval(this.running);
+      }
     });
   }
 
@@ -453,6 +502,7 @@ class Game {
       } catch (error) {
         console.log(error);
         console.log(cell);
+        clearInterval(this.running);
       }
     });
   }
@@ -483,12 +533,7 @@ class Game {
       }
 
       if (animal.energy >= 50) {
-        const { posX, posY } = this.grid.getRandomNeighbourPosition(
-          animal.posX,
-          animal.posY
-        );
-        this.createAnimalIfCellEmpty(posX, posY, animal.rate, animal.range);
-        animal.energy = 10;
+        this.birthAnimal(animal);
       }
 
       animal.age += 1;
@@ -597,6 +642,15 @@ class Game {
     }
   }
 
+  birthAnimal(animal) {
+    const { posX, posY } = this.grid.getRandomNeighbourPosition(
+      animal.posX,
+      animal.posY
+    );
+    this.createAnimalIfCellEmpty(posX, posY, animal.rate, animal.range);
+    animal.energy = 10;
+  }
+
   updateAllPlants() {
     this.plants.forEach((plant) => {
       if (plant.energyIsZero()) {
@@ -610,7 +664,7 @@ class Game {
   updatePlant(plant) {
     if (plant.energy >= 50) {
       plant.split = true;
-    } else if (plant.energy % 20 === 0 && !plant.split) {
+    } else if (plant.energy % 15 === 0 && !plant.split) {
       this.birthPlant(plant);
     } else if (plant.energy === 9) {
       this.plantCellsToUpdate.push(
